@@ -2,9 +2,8 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 
-initializeApp();
-
-const db = getFirestore();
+const app = initializeApp();
+const db = getFirestore(app, "default");
 
 const REGION = "europe-west1";
 const CHALLENGE_IDS = new Set([
