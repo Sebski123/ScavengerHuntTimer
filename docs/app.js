@@ -33,25 +33,76 @@ const $ = (id) => document.getElementById(id);
 let currentState = null;
 let busy = false;
 let clockAnchor = null;
+let answerFeedbackTimeout = null;
+let activeUid = undefined;
+let authStartupComplete = false;
 
-const initialChallenge =
-  new URLSearchParams(window.location.search).get("challenge");
+const challengeParam = new URLSearchParams(window.location.search).get("challenge");
+const challengeId = [
+  "challenge1",
+  "challenge2",
+  "challenge3",
+  "challenge4",
+  "challenge5",
+].includes(challengeParam) ? challengeParam : null;
 
-if (
-  ["challenge1", "challenge2", "challenge3", "challenge4", "challenge5"]
-    .includes(initialChallenge)
-) {
-  $("challenge-select").value = initialChallenge;
+function consumeTeamQrCredentials() {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const isTeamQr = params.get("team-login") === "1";
+
+  if (window.location.hash) {
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${window.location.search}`
+    );
+  }
+
+  if (!isTeamQr) return { credentials: null, invalid: false };
+
+  const email = params.get("email");
+  const password = params.get("password");
+
+  if (!email || !password || email.length > 254 || password.length > 4096) {
+    return { credentials: null, invalid: true };
+  }
+
+  return { credentials: { email, password }, invalid: false };
 }
+
+const teamQr = consumeTeamQrCredentials();
 
 function showMessage(text) {
   $("message").textContent = text;
 }
 
+function showLoginMessage(text) {
+  $("login-message").textContent = text;
+}
+
+function clearAnswerFeedback() {
+  if (answerFeedbackTimeout) {
+    clearTimeout(answerFeedbackTimeout);
+    answerFeedbackTimeout = null;
+  }
+
+  const feedback = $("answer-feedback");
+  feedback.textContent = "";
+  feedback.hidden = true;
+}
+
+function showAnswerFeedback(text) {
+  clearAnswerFeedback();
+  const feedback = $("answer-feedback");
+  feedback.textContent = text;
+  feedback.hidden = false;
+  answerFeedbackTimeout = setTimeout(clearAnswerFeedback, 4000);
+}
+
 function setBusy(value) {
   busy = value;
 
-  document.querySelectorAll("button, select").forEach((element) => {
+  document.querySelectorAll("button").forEach((element) => {
     element.disabled = value;
   });
 }
@@ -160,54 +211,64 @@ function renderState(state) {
 }
 
 async function sendAction(action, extra = {}) {
+  if (!challengeId) {
+    throw new Error("Scan a station QR code before opening a challenge.");
+  }
+
+  const requestUid = auth.currentUser?.uid;
   const result = await callGame({
     action,
-    challengeId: $("challenge-select").value,
+    challengeId,
     ...extra,
   });
 
-  renderState(result.data);
+  if (auth.currentUser?.uid === requestUid) {
+    renderState(result.data);
+  }
+
   return result.data;
 }
 
 async function loadChallenge() {
+  if (!challengeId) {
+    currentState = null;
+    $("station-prompt").hidden = false;
+    $("challenge-content").hidden = true;
+    $("refresh-button").hidden = true;
+    showMessage("");
+    return;
+  }
+
+  $("station-prompt").hidden = true;
+  $("challenge-content").hidden = false;
+  $("refresh-button").hidden = false;
   currentState = null;
   $("pre-start").hidden = true;
   $("attempt-section").hidden = true;
   $("challenge-title").textContent = "Loading…";
   $("answer").value = "";
+  clearAnswerFeedback();
 
   await sendAction("state");
 }
 
-$("login-form").addEventListener("submit", (event) => {
-  event.preventDefault();
+async function handleAuthChange(user) {
+  const uid = user?.uid || null;
+  if (uid === activeUid) return;
+  activeUid = uid;
 
-  perform(async () => {
-    await signInWithEmailAndPassword(
-      auth,
-      $("email").value.trim(),
-      $("password").value
-    );
-
-    $("password").value = "";
-  });
-});
-
-onAuthStateChanged(auth, (user) => {
+  currentState = null;
   $("login-section").hidden = Boolean(user);
   $("game-section").hidden = !user;
-  currentState = null;
 
   if (!user) {
     $("signed-in").textContent = "";
+    showLoginMessage("Scan your team login QR code to sign in.");
     return;
   }
 
   $("signed-in").textContent = `Signed in as ${user.email}`;
-
-  // This callback can run during the login operation.
-  // Load separately rather than nesting another perform() call.
+  showLoginMessage("");
   setBusy(true);
 
   loadChallenge()
@@ -216,10 +277,51 @@ onAuthStateChanged(auth, (user) => {
       showMessage(error.message || "Could not load challenge.");
     })
     .finally(() => setBusy(false));
-});
+}
 
-$("challenge-select").addEventListener("change", () => {
-  perform(loadChallenge);
+async function initializeSession(user) {
+  if (teamQr.invalid) {
+    if (user) await signOut(auth);
+    user = null;
+    showLoginMessage("This team QR code is incomplete. Ask the organizer for a new one.");
+  } else if (teamQr.credentials) {
+    showLoginMessage("Signing in with your team QR code…");
+
+    try {
+      const result = await signInWithEmailAndPassword(
+        auth,
+        teamQr.credentials.email,
+        teamQr.credentials.password
+      );
+      user = result.user;
+      showLoginMessage("");
+    } catch (error) {
+      console.error(error);
+      if (auth.currentUser) await signOut(auth);
+      user = null;
+      showLoginMessage("This team QR code could not sign in. Ask the organizer for help.");
+    }
+  }
+
+  authStartupComplete = true;
+  await handleAuthChange(user);
+}
+
+let initialAuthState = true;
+onAuthStateChanged(auth, (user) => {
+  if (initialAuthState) {
+    initialAuthState = false;
+    initializeSession(user).catch((error) => {
+      console.error(error);
+      authStartupComplete = true;
+      showLoginMessage("Could not initialize sign-in. Refresh and scan your team QR again.");
+    });
+    return;
+  }
+
+  if (authStartupComplete) {
+    handleAuthChange(user);
+  }
 });
 
 $("refresh-button").addEventListener("click", () => {
@@ -251,6 +353,7 @@ $("hint-button").addEventListener("click", () => {
 
 $("answer-form").addEventListener("submit", (event) => {
   event.preventDefault();
+  clearAnswerFeedback();
 
   perform(async () => {
     const result = await sendAction("answer", {
@@ -258,13 +361,15 @@ $("answer-form").addEventListener("submit", (event) => {
     });
 
     if (result.correct === false) {
-      showMessage("Not quite—try again.");
+      showAnswerFeedback("Incorrect answer. Try again.");
     } else if (result.status === "finished") {
       showMessage("Correct! Your time has been recorded.");
       $("answer").value = "";
     }
   });
 });
+
+$("answer").addEventListener("input", clearAnswerFeedback);
 
 $("logout-button").addEventListener("click", () => {
   perform(() => signOut(auth));

@@ -48,6 +48,15 @@
       white-space: pre-wrap;
     }
 
+    #answer-feedback {
+      margin: 0.25rem 0 0.75rem;
+      padding: 0.7rem 0.85rem;
+      border-left: 4px solid #b42318;
+      background: #fff0ee;
+      color: #7a1711;
+      font-weight: 700;
+    }
+
     #clue, .hint-text {
       white-space: pre-wrap;
     }
@@ -64,42 +73,21 @@
 
   <section id="login-section">
     <h2>Team sign-in</h2>
-    <form id="login-form">
-      <label for="email">Team email</label>
-      <input
-        id="email"
-        type="email"
-        autocomplete="username"
-        required
-      >
-
-      <label for="password">Password</label>
-      <input
-        id="password"
-        type="password"
-        autocomplete="current-password"
-        required
-      >
-
-      <button type="submit">Sign in</button>
-    </form>
+    <p id="login-message" role="status" aria-live="polite">
+      Scan your team login QR code to sign in.
+    </p>
   </section>
 
   <main id="game-section" hidden>
     <p id="signed-in"></p>
 
-    <label for="challenge-select">Challenge</label>
-    <select id="challenge-select">
-      <option value="challenge1">Challenge 1</option>
-      <option value="challenge2">Challenge 2</option>
-      <option value="challenge3">Challenge 3</option>
-      <option value="challenge4">Challenge 4</option>
-      <option value="challenge5">Challenge 5</option>
-    </select>
+    <p id="station-prompt" role="status" aria-live="polite" hidden>
+      Scan a station QR code to open its challenge.
+    </p>
 
-    <button id="refresh-button">Refresh challenge</button>
+    <button id="refresh-button" hidden>Refresh challenge</button>
 
-    <section>
+    <section id="challenge-content" hidden>
       <h2 id="challenge-title">Challenge</h2>
 
       <div id="pre-start" hidden>
@@ -124,6 +112,7 @@
         <form id="answer-form">
           <label for="answer">Your answer</label>
           <input id="answer" autocomplete="off" maxlength="200" required>
+          <p id="answer-feedback" role="status" aria-live="polite" hidden></p>
           <button type="submit">Submit answer</button>
         </form>
       </div>

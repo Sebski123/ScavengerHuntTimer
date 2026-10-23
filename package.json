@@ -1,5 +1,11 @@
 {
+  "scripts": {
+    "generate:team-qrs": "node tools/generate-team-qrs.js"
+  },
   "dependencies": {
     "firebase-tools": "^15.34.1"
+  },
+  "devDependencies": {
+    "qrcode": "^1.5.4"
   }
 }
