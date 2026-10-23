@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Organizer Overview | Scavenger Hunt</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, sans-serif;
+      color: #202b36;
+      background: #f3f6f8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+    }
+
+    header, main {
+      width: min(100% - 2rem, 80rem);
+      margin-inline: auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.25rem 0;
+      border-bottom: 1px solid #d4dde3;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.45rem;
+    }
+
+    h2 {
+      margin: 0 0 1rem;
+      font-size: 1.1rem;
+    }
+
+    main {
+      padding: 1.5rem 0 3rem;
+    }
+
+    button, input {
+      min-height: 2.75rem;
+      padding: 0.65rem 0.8rem;
+      border: 1px solid #9aabb8;
+      border-radius: 4px;
+      font: inherit;
+    }
+
+    button {
+      color: white;
+      background: #1d5f73;
+      border-color: #1d5f73;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) {
+      background: #174b5b;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+
+    #sign-out {
+      color: #244152;
+      background: transparent;
+      border-color: #9aabb8;
+    }
+
+    form {
+      width: min(100%, 27rem);
+    }
+
+    label {
+      display: block;
+      margin: 0.9rem 0 0.3rem;
+      font-weight: 600;
+    }
+
+    input {
+      width: 100%;
+      background: white;
+    }
+
+    form button {
+      width: 100%;
+      margin-top: 1rem;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    #message {
+      min-height: 1.5rem;
+      margin: 0 0 1rem;
+      color: #7a1711;
+      font-weight: 600;
+    }
+
+    .overview-bar {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.25rem;
+      margin: 1.5rem 0 1rem;
+    }
+
+    .overview-bar p {
+      margin: 0;
+      color: #526371;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-top: 1px solid #c8d3db;
+      border-bottom: 1px solid #c8d3db;
+      background: white;
+    }
+
+    table {
+      width: 100%;
+      min-width: 850px;
+      border-collapse: collapse;
+      font-variant-numeric: tabular-nums;
+      text-align: left;
+    }
+
+    th, td {
+      padding: 0.75rem 0.8rem;
+      border-bottom: 1px solid #e0e6ea;
+      white-space: nowrap;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      color: #344a58;
+      background: #eaf0f3;
+      font-size: 0.82rem;
+      letter-spacing: 0.02em;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    tbody tr:hover {
+      background: #f7fafb;
+    }
+
+    .status {
+      display: inline-block;
+      min-width: 5.2rem;
+      padding: 0.2rem 0.45rem;
+      border-radius: 3px;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .status-notStarted {
+      color: #475865;
+      background: #e9eef1;
+    }
+
+    .status-running {
+      color: #7c4a08;
+      background: #fff1cf;
+    }
+
+    .status-finished {
+      color: #17593d;
+      background: #dff3e9;
+    }
+
+    @media (max-width: 540px) {
+      header, main {
+        width: min(100% - 1.25rem, 80rem);
+      }
+
+      header {
+        align-items: flex-start;
+      }
+
+      h1 {
+        font-size: 1.2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Scavenger Hunt · Organizer</h1>
+    <div id="session-controls" hidden>
+      <span id="signed-in"></span>
+      <button id="sign-out" type="button">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <p id="message" role="status" aria-live="polite"></p>
+
+    <section id="login-section">
+      <h2>Organizer sign-in</h2>
+      <form id="login-form">
+        <label for="email">Organizer email</label>
+        <input id="email" type="email" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" required>
+        <button id="sign-in" type="submit">Sign in</button>
+      </form>
+    </section>
+
+    <section id="dashboard" hidden>
+      <div class="overview-bar">
+        <p id="team-count"></p>
+        <button id="refresh" type="button">Refresh overview</button>
+      </div>
+      <div class="table-wrap" tabindex="0" aria-label="Challenge overview table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Team</th>
+              <th scope="col">Progress</th>
+              <th scope="col">Challenge</th>
+              <th scope="col">Status</th>
+              <th scope="col">Solving</th>
+              <th scope="col">Penalty</th>
+              <th scope="col">Scored</th>
+              <th scope="col">Hints</th>
+              <th scope="col">Wrong</th>
+            </tr>
+          </thead>
+          <tbody id="overview-rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="./organizer.js"></script>
+</body>
+</html>

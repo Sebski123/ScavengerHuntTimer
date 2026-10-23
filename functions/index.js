@@ -13,6 +13,7 @@ const CHALLENGE_IDS = new Set([
   "challenge4",
   "challenge5",
 ]);
+const MAX_TEAMS = 4;
 
 function normalizeAnswer(value) {
   return value
@@ -238,5 +239,141 @@ exports.game = onCall(
 
       return publicState(puzzle, attempt, nowMs, { correct });
     });
+  }
+);
+
+exports.organizerOverview = onCall(
+  {
+    region: REGION,
+    maxInstances: 2,
+    timeoutSeconds: 30,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Please sign in.");
+    }
+
+    if (
+      request.data != null &&
+      (typeof request.data !== "object" || Array.isArray(request.data) ||
+        Object.keys(request.data).length > 0)
+    ) {
+      throw new HttpsError("invalid-argument", "This function accepts no input.");
+    }
+
+    const organizerSnapshot = await db.doc(`organizers/${request.auth.uid}`).get();
+    if (
+      !organizerSnapshot.exists ||
+      organizerSnapshot.data().role !== "organizer"
+    ) {
+      throw new HttpsError("permission-denied", "Organizer access is required.");
+    }
+
+    const teamSnapshot = await db.collection("teams").limit(MAX_TEAMS + 1).get();
+    if (teamSnapshot.size > MAX_TEAMS) {
+      throw new HttpsError(
+        "failed-precondition",
+        `The dashboard supports at most ${MAX_TEAMS} teams.`
+      );
+    }
+
+    const teams = teamSnapshot.docs.map((document) => {
+      const name = document.data().name;
+      if (typeof name !== "string" || !name.trim()) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Every team must have a non-empty name."
+        );
+      }
+
+      return { uid: document.id, name: name.trim() };
+    }).sort((left, right) => left.name.localeCompare(right.name));
+
+    const challengeIds = [...CHALLENGE_IDS];
+    const puzzleSnapshots = await Promise.all(
+      challengeIds.map((challengeId) => db.doc(`puzzles/${challengeId}`).get())
+    );
+    const challenges = challengeIds.map((challengeId, index) => ({
+      challengeId,
+      title: puzzleSnapshots[index].exists
+        ? puzzleSnapshots[index].data().title || challengeId
+        : challengeId,
+    }));
+
+    const nowMs = Timestamp.now().toMillis();
+    const attemptEntries = await Promise.all(
+      teams.flatMap((team) =>
+        challengeIds.map(async (challengeId) => {
+          const snapshot = await db.doc(`attempts/${team.uid}_${challengeId}`).get();
+          return { teamUid: team.uid, challengeId, attempt: snapshot.exists ? snapshot.data() : null };
+        })
+      )
+    );
+
+    const attemptByKey = new Map(
+      attemptEntries.map((entry) => [
+        `${entry.teamUid}_${entry.challengeId}`,
+        entry.attempt,
+      ])
+    );
+
+    const overviewTeams = teams.map((team) => {
+      const attempts = challengeIds.map((challengeId) => {
+        const attempt = attemptByKey.get(`${team.uid}_${challengeId}`);
+        if (!attempt) {
+          return {
+            challengeId,
+            status: "notStarted",
+            startedAtMs: null,
+            finishedAtMs: null,
+            elapsedMilliseconds: null,
+            scoredMilliseconds: null,
+            hintsUsed: 0,
+            penaltySeconds: 0,
+            wrongAnswers: 0,
+          };
+        }
+
+        const startedAtMs = attempt.startedAt?.toMillis?.() ?? null;
+        const finishedAtMs = attempt.finishedAt?.toMillis?.() ?? null;
+        const penaltySeconds = Number.isInteger(attempt.penaltySeconds) &&
+          attempt.penaltySeconds >= 0 ? attempt.penaltySeconds : 0;
+        const isFinished = finishedAtMs !== null;
+        const elapsedMilliseconds = isFinished
+          ? Number.isFinite(attempt.elapsedMilliseconds)
+            ? attempt.elapsedMilliseconds
+            : startedAtMs === null ? null : Math.max(0, finishedAtMs - startedAtMs)
+          : startedAtMs === null ? null : Math.max(0, nowMs - startedAtMs);
+        const scoredMilliseconds = isFinished && Number.isFinite(attempt.scoredMilliseconds)
+          ? attempt.scoredMilliseconds
+          : elapsedMilliseconds === null
+            ? null
+            : elapsedMilliseconds + penaltySeconds * 1000;
+
+        return {
+          challengeId,
+          status: isFinished ? "finished" : "running",
+          startedAtMs,
+          finishedAtMs,
+          elapsedMilliseconds,
+          scoredMilliseconds,
+          hintsUsed: Number.isInteger(attempt.hintsUsed) && attempt.hintsUsed >= 0
+            ? attempt.hintsUsed
+            : 0,
+          penaltySeconds,
+          wrongAnswers: Number.isInteger(attempt.wrongAnswers) && attempt.wrongAnswers >= 0
+            ? attempt.wrongAnswers
+            : 0,
+        };
+      });
+
+      return {
+        name: team.name,
+        completedChallenges: attempts.filter((attempt) => attempt.status === "finished").length,
+        attempts,
+      };
+    });
+
+    return { serverNowMs: nowMs, challenges, teams: overviewTeams };
   }
 );

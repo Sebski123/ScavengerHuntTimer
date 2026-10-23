@@ -223,7 +223,7 @@ Guide me through, without assuming it is already done:
 2. Choosing database/function regions.
 3. Enabling billing if proceeding.
 4. Enabling Email/Password Authentication.
-5. Creating four team accounts and matching team allowlist documents, then generating private login QRs locally with `npm run generate:team-qrs`.
+5. Creating four team accounts with matching team allowlist documents, plus a separate organizer account with an `organizers/{uid}` document containing `role: "organizer"`; then generating private team login QRs locally with `npm run generate:team-qrs`.
 6. Creating Firestore in production mode.
 7. Registering the web app and adding its configuration.
 8. Adding the GitHub Pages hostname to authorized domains.
@@ -255,13 +255,14 @@ Prefer local Firebase Emulator Suite testing before production deployment, if pr
 
 ## Organizer features and known limitations
 
-Initial version may use Firebase Console to inspect the 20 attempt documents and total results manually.
+The organizer overview at `/organizer.html` shows the status and timing summary for each team/challenge, hint penalties, hint count, wrong-answer count, and per-team completion count. It refreshes manually and does not permit edits or corrections.
+
+Organizer access requires a separate Firebase Auth account and an `organizers/{uid}` Firestore document with `role: "organizer"`. The backend checks this allowlist before returning the overview. Firestore client rules continue denying direct client access.
 
 Deleting an attempt document resets it; only an organizer should do this, preferably before the event.
 
 Not yet designed/implemented:
 
-- Organizer dashboard.
 - Audited manual time corrections.
 - Automated leaderboard/export.
 - Time limits or abandonment rules.

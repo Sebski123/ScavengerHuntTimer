@@ -50,6 +50,22 @@ Store each puzzle in Firestore as `puzzles/challenge1` through `puzzles/challeng
 
 Attempt documents are created by the callable as `attempts/{uid}_{challengeId}`. Teams cannot directly read or write Firestore; the Admin SDK callable checks Firebase Auth and the matching `teams/{uid}` allowlist document.
 
+## Organizer Overview
+
+The organizer dashboard is available at `/organizer.html` after publishing the `docs/` folder. Create a separate Firebase Email/Password account for each organizer; do not use a team account or a team login QR.
+
+To authorize an organizer, find the Firebase Auth user's UID in the Firebase Console, then create a Firestore document at `organizers/{uid}` with this field:
+
+```json
+{
+	"role": "organizer"
+}
+```
+
+The `organizerOverview` callable checks this document before reading team, puzzle-title, or attempt data. Firestore client rules remain deny-all. The dashboard shows a team-by-challenge table with status, elapsed and scored time, hint count and penalty, wrong-answer count, and completed challenge progress. Running times tick locally from the last server response; use **Refresh overview** to fetch authoritative current state. This is a read-only view, not a leaderboard or correction tool.
+
+An authenticated team account without an `organizers/{uid}` document is denied. The callable supports at most four teams and reports an error if more are configured. Missing attempts appear as not started. Puzzle answers, clues, and hint text are not returned.
+
 ## Deploying
 
 GitHub Pages serves the static frontend from `main` → `/docs`. Firebase Hosting is not used. Before deploying Cloud Functions, confirm the project is on the Blaze plan and review expected usage and billing. Budget alerts are notifications, not spending caps. The project already has a Node.js 22 callable in `europe-west1`.
@@ -71,8 +87,16 @@ node --check docs/app.js
 node --check tools/generate-team-qrs.js
 ```
 
+Run the organizer callable smoke test against isolated Firebase emulators:
+
+```powershell
+npm run test:organizer-emulator
+```
+
+This test uses the `demo-scavenger-hunt` project ID and generated fixture accounts/data; it does not access production. The Firebase Emulator Suite requires JDK 21 or newer.
+
 Before the event, verify each team QR signs into the expected team, and that a station QR loads only its requested challenge. Confirm that scanning does not start a timer, repeated starts resume the original timestamp, hints remain progressive and charge once, wrong answers keep the timer running, and finished attempts cannot restart. Check the Firebase console for the four `teams` documents and five puzzle documents. Test on the actual mobile devices and network conditions expected at the stations.
 
 If a team loses connectivity, refresh the challenge to reload authoritative state. A lost or exposed login QR should be treated as a compromised team password: change that account's password, then generate a replacement QR. Only organizers should delete attempt documents to reset attempts, and should do so before play begins.
 
-There is no automated test suite or organizer dashboard yet. Emulator-based testing should be added before relying on changes that affect scoring or authorization.
+The organizer callable has an emulator smoke test. There is no full automated gameplay test suite yet; emulator-based tests should be expanded before relying on changes that affect scoring or authorization.

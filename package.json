@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "generate:team-qrs": "node tools/generate-team-qrs.js"
+    "generate:team-qrs": "node tools/generate-team-qrs.js",
+    "test:organizer-emulator": "firebase emulators:exec --only auth,firestore,functions --project demo-scavenger-hunt \"node tools/organizer-emulator-smoke.js\""
   },
   "dependencies": {
     "firebase-tools": "^15.34.1"
